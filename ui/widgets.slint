@@ -1,0 +1,370 @@
+import { Theme } from "theme.slint";
+
+// Контуры значков в сетке 24×24.
+export global Icons {
+    out property <string> search: "M 11 4 A 7 7 0 1 0 11 18 A 7 7 0 1 0 11 4 Z M 16.5 16.5 L 21 21";
+    out property <string> back: "M 14 5 L 7 12 L 14 19 M 7 12 L 20 12";
+    out property <string> send: "M 4 20 L 21 12 L 4 4 L 4 10 L 14 12 L 4 14 Z";
+    out property <string> check: "M 5 12.5 L 10 17.5 L 19 7";
+    out property <string> checks: "M 1.5 12.5 L 6.5 17.5 L 15.5 7 M 11 16 L 12.5 17.5 L 21.5 7";
+    out property <string> clock: "M 12 4 A 8 8 0 1 0 12 20 A 8 8 0 1 0 12 4 Z M 12 8 L 12 12 L 15 14";
+    out property <string> close: "M 6 6 L 18 18 M 18 6 L 6 18";
+    out property <string> down: "M 6 9 L 12 15 L 18 9";
+    out property <string> menu: "M 4 7 L 20 7 M 4 12 L 20 12 M 4 17 L 20 17";
+    out property <string> moon: "M 20 14.5 A 8.5 8.5 0 1 1 9.5 4 A 7 7 0 0 0 20 14.5 Z";
+    out property <string> sun: "M 12 8 A 4 4 0 1 0 12 16 A 4 4 0 1 0 12 8 Z M 12 2 L 12 4 M 12 20 L 12 22 M 2 12 L 4 12 M 20 12 L 22 12 M 4.9 4.9 L 6.3 6.3 M 17.7 17.7 L 19.1 19.1 M 4.9 19.1 L 6.3 17.7 M 17.7 6.3 L 19.1 4.9";
+    out property <string> logout: "M 10 4 L 5 4 L 5 20 L 10 20 M 14 8 L 18 12 L 14 16 M 18 12 L 9 12";
+    out property <string> pin: "M 9 4 L 15 4 L 14 10 L 17 14 L 7 14 L 10 10 Z M 12 14 L 12 20";
+    out property <string> mute: "M 4 10 L 8 10 L 12 6 L 12 18 L 8 14 L 4 14 Z M 16 9.5 L 21 14.5 M 21 9.5 L 16 14.5";
+    out property <string> error: "M 12 4 A 8 8 0 1 0 12 20 A 8 8 0 1 0 12 4 Z M 12 8 L 12 13 M 12 16 L 12 16.4";
+    out property <string> bookmark: "M 7 4 L 17 4 L 17 20 L 12 16 L 7 20 Z";
+    out property <string> file: "M 7 3 L 14 3 L 18 7 L 18 21 L 7 21 Z M 14 3 L 14 7 L 18 7";
+    out property <string> bubble: "M 5 7 Q 5 5 7 5 L 17 5 Q 19 5 19 7 L 19 13 Q 19 15 17 15 L 11.5 15 L 8 18.5 L 8 15 L 7 15 Q 5 15 5 13 Z";
+}
+
+export component Icon inherits Path {
+    in property <string> shape;
+    in property <color> color: Theme.text-dim;
+    in property <length> size: 20px;
+    in property <bool> solid;
+    width: size;
+    height: size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    commands: shape;
+    fill: solid ? color : transparent;
+    stroke: color;
+    stroke-width: size < 18px ? 1.5px : 2px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// Вращающаяся дуга. Программный рендерер не умеет поворачивать элементы,
+// поэтому концы дуги считаются тригонометрией.
+export component Spinner inherits Rectangle {
+    in property <color> tint: Theme.accent;
+    in property <length> size: 28px;
+    property <angle> turn: 360deg * mod(animation-tick() / 900ms, 1);
+    width: size;
+    height: size;
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: transparent;
+        stroke: root.tint;
+        stroke-width: root.size < 20px ? 2px : 2.5px;
+        stroke-line-cap: round;
+        MoveTo {
+            x: 12 + 9 * cos(root.turn);
+            y: 12 + 9 * sin(root.turn);
+        }
+
+        ArcTo {
+            x: 12 + 9 * cos(root.turn + 250deg);
+            y: 12 + 9 * sin(root.turn + 250deg);
+            radius-x: 9;
+            radius-y: 9;
+            sweep: true;
+            large-arc: true;
+        }
+    }
+}
+
+// Три подпрыгивающие точки «печатает».
+export component TypingDots inherits Rectangle {
+    in property <color> tint: Theme.accent;
+    in property <length> dot: 4px;
+    property <float> phase: mod(animation-tick() / 1100ms, 1);
+    width: dot * 3 + 6px;
+    height: dot * 2.5;
+    for i in 3: Rectangle {
+        property <float> local: mod(root.phase - i * 0.16 + 1, 1);
+        property <float> lift: local < 0.45 ? sin(local / 0.45 * 180deg) : 0;
+        x: i * (root.dot + 3px);
+        y: root.height - root.dot - lift * root.dot * 1.2;
+        width: root.dot;
+        height: root.dot;
+        border-radius: root.dot / 2;
+        background: root.tint;
+        opacity: 0.5 + 0.5 * lift;
+    }
+}
+
+export component Avatar inherits Rectangle {
+    in property <string> initials;
+    in property <int> color-index;
+    in property <length> size: 46px;
+    in property <bool> saved;
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    // Сплошной цвет: градиент программный рендерер не скругляет.
+    background: saved ? Theme.primary : Theme.avatars[mod(color-index, 7)];
+    if !root.saved: Text {
+        text: root.initials;
+        color: white;
+        font-size: root.size * 0.38;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    if root.saved: Icon {
+        shape: Icons.bookmark;
+        color: white;
+        solid: true;
+        size: root.size * 0.48;
+    }
+}
+
+export component IconButton inherits Rectangle {
+    in property <string> shape;
+    in property <color> tint: Theme.text-dim;
+    in property <bool> solid;
+    in property <length> size: 38px;
+    in property <length> icon-size: 20px;
+    callback clicked;
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    background: touch.pressed ? Theme.hover.darker(0.12) : touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Theme.fast; }
+    Icon {
+        shape: root.shape;
+        color: root.tint;
+        solid: root.solid;
+        size: root.icon-size;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component PrimaryButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> busy;
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 46px;
+    border-radius: 12px;
+    background: !enabled ? Theme.primary.with-alpha(0.45) : touch.pressed ? Theme.primary.darker(0.2) : touch.has-hover ? Theme.primary.brighter(0.1) : Theme.primary;
+    animate background { duration: Theme.fast; }
+    Text {
+        text: root.text;
+        color: white;
+        font-size: 15px;
+        font-weight: 600;
+        opacity: root.busy ? 0 : 1;
+        animate opacity { duration: Theme.fast; }
+    }
+
+    if root.busy: Spinner {
+        tint: white;
+        size: 22px;
+    }
+    touch := TouchArea {
+        enabled: root.enabled && !root.busy;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component LinkButton inherits Rectangle {
+    in property <string> text;
+    callback clicked;
+    height: 32px;
+    Text {
+        text: root.text;
+        color: touch.has-hover ? Theme.accent.brighter(0.2) : Theme.accent;
+        font-size: 14px;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component TextField inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    in property <string> placeholder;
+    in property <InputType> input-type: InputType.text;
+    in property <bool> enabled: true;
+    in property <length> text-size: 15px;
+    in property <length> left-padding: 14px;
+    in property <length> right-padding: 14px;
+    out property <bool> has-focus: input.has-focus;
+    callback accepted;
+    callback edited;
+    public function focus-input() {
+        input.focus();
+    }
+    height: 46px;
+    border-radius: 12px;
+    background: Theme.field;
+    border-width: 2px;
+    border-color: input.has-focus ? Theme.accent : transparent;
+    animate border-color { duration: Theme.normal; }
+    forward-focus: input;
+    Text {
+        x: root.left-padding;
+        width: parent.width - root.left-padding - root.right-padding;
+        text: root.placeholder;
+        color: Theme.text-dim;
+        font-size: root.text-size;
+        vertical-alignment: center;
+        overflow: elide;
+        visible: input.text == "";
+    }
+
+    input := TextInput {
+        x: root.left-padding;
+        width: parent.width - root.left-padding - root.right-padding;
+        height: parent.height;
+        vertical-alignment: center;
+        single-line: true;
+        enabled: root.enabled;
+        input-type: root.input-type;
+        color: Theme.text;
+        font-size: root.text-size;
+        selection-background-color: Theme.primary;
+        selection-foreground-color: white;
+        accepted => {
+            root.accepted();
+        }
+        edited => {
+            root.edited();
+        }
+    }
+}
+
+// Счётчик непрочитанных.
+export component Badge inherits Rectangle {
+    in property <int> count;
+    in property <bool> muted;
+    in property <bool> inverted;
+    width: max(22px, label.preferred-width + 12px);
+    height: 22px;
+    border-radius: 11px;
+    background: inverted ? white : muted ? Theme.badge-muted : Theme.badge;
+    animate background { duration: Theme.normal; }
+    label := Text {
+        text: root.count > 999 ? "999+" : "\{root.count}";
+        color: root.inverted ? Theme.selected : white;
+        font-size: 12px;
+        font-weight: 600;
+    }
+}
+
+// Подпись по центру ленты: дата или служебное сообщение.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    height: 24px;
+    Rectangle {
+        width: min(root.width - 32px, label.preferred-width + 22px);
+        height: 24px;
+        border-radius: 12px;
+        background: Theme.pill;
+        label := Text {
+            width: parent.width - 20px;
+            text: root.text;
+            color: white;
+            font-size: 12.5px;
+            font-weight: 500;
+            overflow: elide;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component MenuItem inherits Rectangle {
+    in property <string> shape;
+    in property <string> text;
+    in property <color> tint: Theme.text;
+    callback clicked;
+    height: 42px;
+    border-radius: 8px;
+    background: touch.pressed ? Theme.hover.darker(0.1) : touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Theme.fast; }
+    Icon {
+        x: 12px;
+        shape: root.shape;
+        color: root.tint;
+        size: 19px;
+    }
+
+    Text {
+        x: 44px;
+        width: parent.width - 56px;
+        text: root.text;
+        color: root.tint;
+        font-size: 14px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// Тонкая полоса прокрутки поверх содержимого; видна, пока активна.
+export component ScrollBar inherits Rectangle {
+    in property <length> content-size;
+    in property <length> view-size;
+    in property <length> offset;
+    in property <bool> active;
+    callback dragged(length);
+    property <length> range: max(0px, content-size - view-size);
+    property <length> thumb: max(36px, view-size * view-size / max(content-size, 1px));
+    property <length> pressed-offset;
+    width: 12px;
+    visible: range > 0;
+    opacity: touch.pressed || touch.has-hover ? 1 : active ? 0.55 : 0;
+    animate opacity { duration: Theme.normal; }
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.pressed-offset = root.offset;
+            }
+        }
+        moved => {
+            if self.pressed && root.view-size > root.thumb {
+                root.dragged(clamp(root.pressed-offset + (self.mouse-y - self.pressed-y) * root.range / (root.view-size - root.thumb), 0px, root.range));
+            }
+        }
+    }
+
+    Rectangle {
+        x: touch.pressed || touch.has-hover ? 3px : 5px;
+        y: root.range > 0 ? (root.view-size - root.thumb) * clamp(root.offset / root.range, 0, 1) : 0px;
+        width: parent.width - self.x - 2px;
+        height: root.thumb;
+        border-radius: self.width / 2;
+        background: Theme.text-dim.with-alpha(0.55);
+        animate x { duration: Theme.fast; }
+    }
+}
+
+// Имя компонента важно: только в «ListView» Slint создаёт строки лениво,
+// для видимой части списка.
+export component ListView inherits Flickable {
+    out property <length> visible-width <=> self.width;
+    out property <length> visible-height <=> self.height;
+    interactive: true;
+    mouse-drag-pan-enabled: false;
+    @children
+}

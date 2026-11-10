@@ -1,0 +1,442 @@
+import { Theme } from "theme.slint";
+import { AuthStep, DialogItem, MessageItem, MsgState } from "types.slint";
+import { Avatar, Icons, MenuItem, PrimaryButton } from "widgets.slint";
+import { LoginScreen } from "login.slint";
+import { Sidebar } from "sidebar.slint";
+import { ChatPane } from "chat.slint";
+
+export { Theme, AuthStep, DialogItem, MessageItem, MsgState }
+
+export component AppWindow inherits Window {
+    // Вход.
+    in property <bool> authorized;
+    in property <AuthStep> auth-step: AuthStep.connecting;
+    in property <string> auth-error;
+    in-out property <bool> auth-busy;
+    in property <string> auth-phone;
+    in property <string> password-hint;
+    callback submit-credentials(string, string);
+    callback submit-phone(string);
+    callback submit-code(string);
+    callback submit-password(string);
+    callback auth-back();
+
+    // Список чатов.
+    in property <[DialogItem]> dialogs;
+    in property <bool> dialogs-loading;
+    in property <int> current-key: -1;
+    in property <bool> online: true;
+    in property <string> me-name;
+    in property <string> me-initials;
+    in property <int> me-color;
+    callback dialog-clicked(int);
+    callback search-edited(string);
+    callback dialogs-near-end();
+    callback logout();
+    callback theme-toggled(bool);
+
+    // Открытый чат.
+    in property <bool> chat-open;
+    in property <string> chat-title;
+    in property <string> chat-subtitle;
+    in property <string> chat-initials;
+    in property <int> chat-color;
+    in property <bool> chat-saved;
+    in property <bool> chat-typing;
+    in property <bool> chat-group;
+    in property <bool> chat-can-write: true;
+    in property <bool> history-loading;
+    in property <[MessageItem]> messages;
+    in property <int> new-below;
+    in-out property <bool> keep-position <=> chat.keep-position;
+    in-out property <string> draft <=> chat.draft;
+    out property <bool> viewing: chat.viewing;
+    out property <bool> at-bottom: chat.at-bottom;
+    callback send-message(string);
+    callback composer-edited();
+    callback need-older();
+    callback close-chat();
+    callback retry-message(int);
+    callback chat-viewed();
+
+    // Неустранимая ошибка: закрывает весь интерфейс.
+    in property <string> fatal;
+
+    property <bool> narrow: self.width < 720px;
+    property <length> side-width: narrow ? self.width : clamp(self.width * 0.34, 290px, 400px);
+    // 0 — чат выдвинут, 1 — убран; в узком окне панели сменяют друг друга.
+    property <float> slide: chat-open ? 0 : 1;
+    property <bool> menu-open;
+    property <bool> confirm-logout;
+    property <string> toast;
+    property <bool> toast-visible;
+    animate slide {
+        duration: 240ms;
+        easing: ease-out;
+    }
+
+    public function show-toast(text: string) {
+        root.toast = text;
+        root.toast-visible = true;
+        toast-timer.restart();
+    }
+
+    public function focus-composer() {
+        chat.focus-input();
+    }
+
+    public function jump-to-bottom() {
+        chat.jump-to-bottom();
+    }
+
+    public function scroll-to-bottom() {
+        chat.scroll-to-bottom();
+    }
+
+    function copy-text(text: string) {
+        clipboard.text = text;
+        clipboard.select-all();
+        clipboard.copy();
+        root.show-toast("Текст скопирован");
+    }
+
+    changed viewing => {
+        if root.viewing {
+            root.chat-viewed();
+        }
+    }
+    changed authorized => {
+        root.menu-open = false;
+        root.confirm-logout = false;
+        if root.authorized {
+            keys.focus();
+        } else {
+            login.focus-step();
+        }
+    }
+
+    title: "Ferrogram";
+    preferred-width: 1000px;
+    preferred-height: 680px;
+    min-width: 360px;
+    min-height: 480px;
+    background: Theme.window;
+    default-font-size: 14px;
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                if root.confirm-logout {
+                    root.confirm-logout = false;
+                } else if root.menu-open {
+                    root.menu-open = false;
+                } else if root.chat-open {
+                    root.close-chat();
+                }
+                return accept;
+            }
+            return reject;
+        }
+
+        Rectangle {
+            opacity: root.authorized ? 1 : 0;
+            visible: self.opacity > 0.01;
+            animate opacity { duration: Theme.slow; }
+
+            sidebar := Sidebar {
+                // В узком окне список слегка уезжает под выдвигающийся чат.
+                x: root.narrow ? -(1 - root.slide) * 90px : 0px;
+                width: root.side-width;
+                dialogs: root.dialogs;
+                loading: root.dialogs-loading;
+                current-key: root.current-key;
+                online: root.online;
+                dialog-clicked(key) => {
+                    root.dialog-clicked(key);
+                }
+                search-edited(text) => {
+                    root.search-edited(text);
+                }
+                near-end => {
+                    root.dialogs-near-end();
+                }
+                menu-clicked => {
+                    root.menu-open = !root.menu-open;
+                }
+            }
+
+            chat := ChatPane {
+                x: root.narrow ? root.slide * root.width : root.side-width + 1px;
+                width: root.narrow ? root.width : root.width - root.side-width - 1px;
+                visible: !root.narrow || root.slide < 0.999;
+                open: root.chat-open || (root.narrow && root.slide < 0.999);
+                active: root.chat-open;
+                narrow: root.narrow;
+                title: root.chat-title;
+                subtitle: root.chat-subtitle;
+                initials: root.chat-initials;
+                color-index: root.chat-color;
+                saved: root.chat-saved;
+                typing: root.chat-typing;
+                group: root.chat-group;
+                can-write: root.chat-can-write;
+                loading: root.history-loading;
+                messages: root.messages;
+                new-below: root.new-below;
+                send(text) => {
+                    root.send-message(text);
+                }
+                edited => {
+                    root.composer-edited();
+                }
+                need-older => {
+                    root.need-older();
+                }
+                back => {
+                    root.close-chat();
+                }
+                retry(id) => {
+                    root.retry-message(id);
+                }
+                copy(text) => {
+                    root.copy-text(text);
+                }
+            }
+
+            Rectangle {
+                x: root.side-width;
+                width: 1px;
+                background: Theme.divider;
+                visible: !root.narrow;
+            }
+        }
+
+        login := LoginScreen {
+            opacity: root.authorized ? 0 : 1;
+            visible: self.opacity > 0.01;
+            step: root.auth-step;
+            error: root.auth-error;
+            busy: root.auth-busy;
+            phone: root.auth-phone;
+            hint: root.password-hint;
+            animate opacity { duration: Theme.slow; }
+            submit-credentials(id, hash) => {
+                root.submit-credentials(id, hash);
+            }
+            submit-phone(phone) => {
+                root.submit-phone(phone);
+            }
+            submit-code(code) => {
+                root.submit-code(code);
+            }
+            submit-password(password) => {
+                root.submit-password(password);
+            }
+            back => {
+                root.auth-back();
+            }
+        }
+
+        // Меню: пока оно открыто, щелчок мимо закрывает его.
+        TouchArea {
+            enabled: root.menu-open;
+            clicked => {
+                root.menu-open = false;
+            }
+        }
+
+        Rectangle {
+            x: 10px;
+            y: root.menu-open ? 54px : 42px;
+            width: 252px;
+            height: 164px;
+            border-radius: 14px;
+            background: Theme.card;
+            border-width: 1px;
+            border-color: Theme.divider;
+            opacity: root.menu-open ? 1 : 0;
+            visible: self.opacity > 0.01;
+            animate y {
+                duration: Theme.normal;
+                easing: ease-out;
+            }
+            animate opacity { duration: Theme.normal; }
+            TouchArea { }
+
+            Avatar {
+                x: 14px;
+                y: 14px;
+                size: 40px;
+                initials: root.me-initials;
+                color-index: root.me-color;
+            }
+
+            Text {
+                x: 66px;
+                y: 14px;
+                width: parent.width - 80px;
+                height: 40px;
+                text: root.me-name;
+                color: Theme.text;
+                font-size: 15px;
+                font-weight: 600;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            Rectangle {
+                y: 66px;
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            MenuItem {
+                x: 6px;
+                y: 72px;
+                width: parent.width - 12px;
+                shape: Theme.dark ? Icons.sun : Icons.moon;
+                text: Theme.dark ? "Светлая тема" : "Тёмная тема";
+                clicked => {
+                    Theme.dark = !Theme.dark;
+                    root.theme-toggled(Theme.dark);
+                }
+            }
+
+            MenuItem {
+                x: 6px;
+                y: 116px;
+                width: parent.width - 12px;
+                shape: Icons.logout;
+                text: "Выйти";
+                tint: Theme.danger;
+                clicked => {
+                    root.menu-open = false;
+                    root.confirm-logout = true;
+                }
+            }
+        }
+
+        // Подтверждение выхода.
+        Rectangle {
+            background: Theme.scrim;
+            opacity: root.confirm-logout ? 1 : 0;
+            visible: self.opacity > 0.01;
+            animate opacity { duration: Theme.normal; }
+            TouchArea {
+                clicked => {
+                    root.confirm-logout = false;
+                }
+            }
+
+            Rectangle {
+                y: (parent.height - self.height) / 2 + (root.confirm-logout ? 0px : 18px);
+                width: min(340px, parent.width - 40px);
+                height: 176px;
+                border-radius: 16px;
+                background: Theme.card;
+                animate y {
+                    duration: Theme.normal;
+                    easing: ease-out;
+                }
+                TouchArea { }
+
+                Text {
+                    x: 22px;
+                    y: 20px;
+                    text: "Выйти из аккаунта?";
+                    color: Theme.text;
+                    font-size: 17px;
+                    font-weight: 700;
+                }
+
+                Text {
+                    x: 22px;
+                    y: 52px;
+                    width: parent.width - 44px;
+                    text: "Сессия на этом устройстве будет завершена. Переписка останется в Telegram.";
+                    color: Theme.text-dim;
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+
+                MenuItem {
+                    x: 14px;
+                    y: parent.height - 56px;
+                    width: (parent.width - 36px) / 2;
+                    shape: Icons.close;
+                    text: "Отмена";
+                    clicked => {
+                        root.confirm-logout = false;
+                    }
+                }
+
+                MenuItem {
+                    x: parent.width / 2 + 4px;
+                    y: parent.height - 56px;
+                    width: (parent.width - 36px) / 2;
+                    shape: Icons.logout;
+                    text: "Выйти";
+                    tint: Theme.danger;
+                    clicked => {
+                        root.confirm-logout = false;
+                        root.logout();
+                    }
+                }
+            }
+        }
+
+        // Всплывающее уведомление.
+        Rectangle {
+            y: parent.height - (root.toast-visible ? 96px : 60px);
+            width: min(parent.width - 40px, toast-label.preferred-width + 36px);
+            height: 40px;
+            border-radius: 20px;
+            background: #1b232c.with-alpha(0.94);
+            opacity: root.toast-visible ? 1 : 0;
+            visible: self.opacity > 0.01;
+            animate y {
+                duration: Theme.slow;
+                easing: ease-out;
+            }
+            animate opacity { duration: Theme.normal; }
+            toast-label := Text {
+                width: parent.width - 32px;
+                text: root.toast;
+                color: white;
+                font-size: 14px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        if root.fatal != "": Rectangle {
+            background: Theme.window;
+            TouchArea { }
+
+            Text {
+                width: min(420px, parent.width - 48px);
+                text: root.fatal;
+                color: Theme.text;
+                font-size: 15px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    toast-timer := Timer {
+        interval: 3200ms;
+        running: false;
+        triggered => {
+            root.toast-visible = false;
+            self.stop();
+        }
+    }
+
+    // Невидимое поле: единственный способ положить текст в буфер обмена из Slint.
+    clipboard := TextInput {
+        width: 0px;
+        height: 0px;
+        visible: false;
+    }
+}

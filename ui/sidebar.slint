@@ -1,0 +1,343 @@
+import { Theme } from "theme.slint";
+import { DialogItem, MsgState } from "types.slint";
+import { Avatar, Badge, Icon, Icons, IconButton, ListView, ScrollBar, Spinner, TextField, TypingDots } from "widgets.slint";
+
+component DialogRow inherits Rectangle {
+    in property <DialogItem> d;
+    in property <bool> selected;
+    callback clicked;
+    property <color> title-color: selected ? white : Theme.text;
+    property <color> dim-color: selected ? #ffffff.with-alpha(0.8) : Theme.text-dim;
+    property <color> accent-color: selected ? white : Theme.accent;
+    height: 68px;
+
+    Rectangle {
+        x: 6px;
+        y: 2px;
+        width: parent.width - 12px;
+        height: parent.height - 4px;
+        border-radius: 12px;
+        background: root.selected ? Theme.selected : touch.pressed ? Theme.hover.darker(0.08) : touch.has-hover ? Theme.hover : Theme.hover.with-alpha(0);
+        animate background { duration: 140ms; }
+    }
+
+    avatar := Avatar {
+        x: 16px;
+        y: (parent.height - self.height) / 2;
+        size: 48px;
+        initials: root.d.initials;
+        color-index: root.d.color;
+        saved: root.d.saved;
+    }
+
+    if root.d.online: Rectangle {
+        x: avatar.x + 35px;
+        y: avatar.y + 35px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: root.selected ? Theme.selected : Theme.sidebar;
+        Rectangle {
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background: root.selected ? white : Theme.online;
+        }
+    }
+
+    VerticalLayout {
+        x: 76px;
+        width: parent.width - 76px - 18px;
+        alignment: center;
+        spacing: 4px;
+        HorizontalLayout {
+            height: 20px;
+            spacing: 5px;
+            Text {
+                text: root.d.title;
+                color: root.title-color;
+                font-size: 14px;
+                font-weight: 600;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+
+            if root.d.muted: VerticalLayout {
+                alignment: center;
+                Icon {
+                    shape: Icons.mute;
+                    color: root.dim-color;
+                    size: 14px;
+                }
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            if root.d.state != MsgState.none: VerticalLayout {
+                alignment: center;
+                Icon {
+                    shape: root.d.state == MsgState.read ? Icons.checks : root.d.state == MsgState.sent ? Icons.check : root.d.state == MsgState.failed ? Icons.error : Icons.clock;
+                    color: root.d.state == MsgState.failed ? Theme.danger : root.accent-color;
+                    size: 15px;
+                }
+            }
+            Text {
+                text: root.d.time;
+                color: root.dim-color;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+        }
+
+        HorizontalLayout {
+            height: 22px;
+            spacing: 6px;
+            if !root.d.typing: HorizontalLayout {
+                horizontal-stretch: 1;
+                if root.d.prefix != "": Text {
+                    text: root.d.prefix;
+                    color: root.accent-color;
+                    font-size: 13.5px;
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.d.preview;
+                    color: root.dim-color;
+                    font-size: 13.5px;
+                    overflow: elide;
+                    vertical-alignment: center;
+                }
+            }
+            if root.d.typing: HorizontalLayout {
+                horizontal-stretch: 1;
+                alignment: start;
+                spacing: 6px;
+                Text {
+                    text: "печатает";
+                    color: root.accent-color;
+                    font-size: 13.5px;
+                    vertical-alignment: center;
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    TypingDots {
+                        tint: root.accent-color;
+                    }
+                }
+            }
+            if root.d.unread > 0: Badge {
+                count: root.d.unread;
+                muted: root.d.muted;
+                inverted: root.selected;
+            }
+            if root.d.unread == 0 && root.d.pinned: VerticalLayout {
+                alignment: center;
+                Icon {
+                    shape: Icons.pin;
+                    color: root.dim-color;
+                    size: 15px;
+                }
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// Заглушка строки, пока список чатов загружается.
+component SkeletonRow inherits Rectangle {
+    in property <int> index;
+    property <float> pulse: 0.55 + 0.45 * sin(360deg * mod(animation-tick() / 1400ms - index * 0.08 + 1, 1));
+    height: 68px;
+    Rectangle {
+        x: 16px;
+        width: 48px;
+        height: 48px;
+        border-radius: 24px;
+        background: Theme.hover;
+        opacity: root.pulse;
+    }
+
+    Rectangle {
+        x: 76px;
+        y: 17px;
+        width: 90px + mod(index * 37, 80) * 1px;
+        height: 12px;
+        border-radius: 6px;
+        background: Theme.hover;
+        opacity: root.pulse;
+    }
+
+    Rectangle {
+        x: 76px;
+        y: 40px;
+        width: min(parent.width - 100px, 150px + mod(index * 53, 90) * 1px);
+        height: 11px;
+        border-radius: 5.5px;
+        background: Theme.hover;
+        opacity: root.pulse;
+    }
+}
+
+export component Sidebar inherits Rectangle {
+    in property <[DialogItem]> dialogs;
+    in property <bool> loading;
+    in property <int> current-key: -1;
+    in property <bool> online: true;
+    callback dialog-clicked(int);
+    callback search-edited(string);
+    callback near-end();
+    callback menu-clicked();
+
+    property <bool> scrolling;
+    property <length> remaining: list.content-height + list.content-y - list.visible-height;
+    changed remaining => {
+        if remaining < 700px {
+            root.near-end();
+        }
+    }
+
+    public function focus-search() {
+        search.focus-input();
+    }
+
+    background: Theme.sidebar;
+    animate background { duration: Theme.normal; }
+
+    Rectangle {
+        y: 0px;
+        height: 56px;
+        IconButton {
+            x: 10px;
+            shape: Icons.menu;
+            clicked => {
+                root.menu-clicked();
+            }
+        }
+
+        search := TextField {
+            x: 56px;
+            width: parent.width - 56px - 14px;
+            height: 38px;
+            border-radius: 19px;
+            text-size: 14px;
+            left-padding: 38px;
+            right-padding: 36px;
+            placeholder: "Поиск";
+            edited => {
+                root.search-edited(self.text);
+            }
+        }
+
+        Icon {
+            x: 56px + 13px;
+            shape: Icons.search;
+            size: 17px;
+        }
+
+        if search.text != "": IconButton {
+            x: parent.width - 14px - 34px;
+            size: 30px;
+            icon-size: 13px;
+            shape: Icons.close;
+            clicked => {
+                search.text = "";
+                root.search-edited("");
+            }
+        }
+    }
+
+    banner := Rectangle {
+        y: 56px;
+        height: root.online ? 0px : 30px;
+        clip: true;
+        background: Theme.hover;
+        animate height {
+            duration: Theme.normal;
+            easing: ease-out;
+        }
+        if !root.online: HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                Spinner {
+                    size: 14px;
+                    tint: Theme.text-dim;
+                }
+            }
+
+            Text {
+                text: "Соединение…";
+                color: Theme.text-dim;
+                font-size: 13px;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    Rectangle {
+        y: 56px + banner.height;
+        height: parent.height - self.y;
+        clip: true;
+        hover := TouchArea {
+            list := ListView {
+                flicked => {
+                    root.scrolling = true;
+                    idle.restart();
+                }
+                for d in root.dialogs: DialogRow {
+                    d: d;
+                    selected: d.key == root.current-key;
+                    clicked => {
+                        root.dialog-clicked(d.key);
+                    }
+                }
+            }
+        }
+
+        ScrollBar {
+            x: parent.width - self.width;
+            height: parent.height;
+            content-size: list.content-height;
+            view-size: list.visible-height;
+            offset: -list.content-y;
+            active: hover.has-hover || root.scrolling;
+            dragged(offset) => {
+                list.content-y = -offset;
+            }
+        }
+
+        if root.loading && root.dialogs.length == 0: VerticalLayout {
+            alignment: start;
+            for index in 9: SkeletonRow {
+                index: index;
+            }
+        }
+        if !root.loading && root.dialogs.length == 0: Text {
+            y: 48px;
+            height: 24px;
+            text: search.text == "" ? "Чатов пока нет" : "Ничего не найдено";
+            color: Theme.text-dim;
+            font-size: 14px;
+            horizontal-alignment: center;
+        }
+    }
+
+    idle := Timer {
+        interval: 1200ms;
+        running: false;
+        triggered => {
+            root.scrolling = false;
+            self.stop();
+        }
+    }
+}

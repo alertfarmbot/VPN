@@ -1,0 +1,50 @@
+// Данные, которыми обмениваются интерфейс и Rust.
+
+export enum AuthStep { connecting, credentials, phone, code, password }
+
+export enum MsgState { none, pending, sent, read, failed }
+
+export struct DialogItem {
+    // Короткий номер чата: 64-битные идентификаторы Telegram в Slint не помещаются.
+    key: int,
+    title: string,
+    initials: string,
+    color: int,
+    saved: bool,
+    // «Вы: » или имя автора в группе.
+    prefix: string,
+    preview: string,
+    time: string,
+    unread: int,
+    muted: bool,
+    pinned: bool,
+    online: bool,
+    typing: bool,
+    archived: bool,
+    // Статус последнего сообщения, если оно исходящее.
+    state: MsgState,
+}
+
+export struct MessageItem {
+    // Отрицательный у сообщений, которые ещё отправляются.
+    id: int,
+    text: string,
+    media: string,
+    time: string,
+    sender: string,
+    sender-initials: string,
+    sender-color: int,
+    // Непустой у первого сообщения дня.
+    date-header: string,
+    outgoing: bool,
+    service: bool,
+    edited: bool,
+    // Первое и последнее в серии сообщений одного автора.
+    first: bool,
+    last: bool,
+    state: MsgState,
+    // Только что пришло: показать с анимацией.
+    fresh: bool,
+    // Удалено: свернуть перед тем, как убрать из списка.
+    removing: bool,
+}

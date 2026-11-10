@@ -1,0 +1,35 @@
+import { Palette } from "std-widgets.slint";
+
+// Цвета и длительности анимаций; по умолчанию тема повторяет системную.
+export global Theme {
+    in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <color> window: dark ? #0e1621 : #ffffff;
+    out property <color> sidebar: dark ? #17212b : #ffffff;
+    out property <color> chat: dark ? #0e1621 : #d9e3ea;
+    out property <color> header: dark ? #17212b : #ffffff;
+    out property <color> divider: dark ? #0a1017 : #e2e6ea;
+    out property <color> card: dark ? #1c2733 : #ffffff;
+    out property <color> text: dark ? #f1f3f5 : #14181c;
+    out property <color> text-dim: dark ? #7f91a4 : #6f7a86;
+    out property <color> accent: dark ? #5eb5f7 : #2f8be6;
+    out property <color> primary: dark ? #3f8fd9 : #3390ec;
+    out property <color> selected: dark ? #2b5278 : #3390ec;
+    out property <color> hover: dark ? #202b36 : #eef1f4;
+    out property <color> field: dark ? #242f3d : #eef1f4;
+    out property <color> bubble-in: dark ? #182533 : #ffffff;
+    out property <color> bubble-out: dark ? #2b5278 : #e1f6d0;
+    out property <color> bubble-out-meta: dark ? #8fb6dc : #5d9c58;
+    out property <color> read-mark: dark ? #6fc0ff : #3fa73a;
+    out property <color> pill: dark ? #000000.with-alpha(0.32) : #000000.with-alpha(0.22);
+    out property <color> badge: dark ? #4a90d0 : #3390ec;
+    out property <color> badge-muted: dark ? #44566a : #b6bdc4;
+    out property <color> online: #4dcd5e;
+    out property <color> danger: #e5484d;
+    out property <color> scrim: #000000.with-alpha(0.45);
+    out property <[color]> avatars: [#e5646e, #f0954f, #9a79e8, #57b25c, #3fb0c4, #4f9de8, #e8689f];
+
+    out property <duration> fast: 120ms;
+    out property <duration> normal: 200ms;
+    out property <duration> slow: 280ms;
+}

@@ -1,0 +1,263 @@
+import { Theme } from "theme.slint";
+import { AuthStep } from "types.slint";
+import { Icon, Icons, Spinner, PrimaryButton, LinkButton, TextField } from "widgets.slint";
+
+// Один шаг входа: проявляется и подъезжает справа, когда становится текущим.
+component Page inherits Rectangle {
+    in property <bool> active;
+    in property <string> title;
+    in property <string> description;
+    in property <string> error;
+    opacity: active ? 1 : 0;
+    visible: self.opacity > 0.01;
+    animate opacity { duration: Theme.normal; }
+    VerticalLayout {
+        x: root.active ? 0px : 28px;
+        alignment: start;
+        spacing: 12px;
+        animate x {
+            duration: Theme.slow;
+            easing: ease-out;
+        }
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: 22px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: root.description;
+            color: Theme.text-dim;
+            font-size: 14px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        Rectangle {
+            height: 4px;
+        }
+
+        @children
+
+        Text {
+            text: root.error;
+            color: Theme.danger;
+            font-size: 13.5px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component LoginScreen inherits Rectangle {
+    in property <AuthStep> step;
+    in property <string> error;
+    in property <bool> busy;
+    in property <string> phone;
+    in property <string> hint;
+    callback submit-credentials(string, string);
+    callback submit-phone(string);
+    callback submit-code(string);
+    callback submit-password(string);
+    callback back();
+
+    property <bool> shaking;
+    property <duration> shake-start;
+    // Затухающее покачивание карточки при ошибке.
+    property <float> shake-phase: shaking ? clamp((animation-tick() - shake-start) / 420ms, 0, 1) : 1;
+    property <length> shake: sin(shake-phase * 1080deg) * 8px * (1 - shake-phase);
+
+    public function focus-step() {
+        if step == AuthStep.credentials {
+            api-id.focus-input();
+        } else if step == AuthStep.phone {
+            phone-field.focus-input();
+        } else if step == AuthStep.code {
+            code-field.focus-input();
+        } else if step == AuthStep.password {
+            password-field.focus-input();
+        }
+    }
+
+    changed step => {
+        code-field.text = "";
+        password-field.text = "";
+        self.focus-step();
+    }
+    changed error => {
+        if error != "" {
+            shake-start = animation-tick();
+            shaking = true;
+        }
+    }
+
+    background: Theme.window;
+    animate background { duration: Theme.normal; }
+
+    Timer {
+        interval: 450ms;
+        running: root.shaking;
+        triggered => {
+            root.shaking = false;
+        }
+    }
+
+    Rectangle {
+        x: (parent.width - self.width) / 2 + root.shake;
+        y: max(16px, (parent.height - self.height) / 2);
+        width: min(380px, parent.width - 40px);
+        height: 500px;
+
+        Rectangle {
+            y: 0px;
+            width: 92px;
+            height: 92px;
+            border-radius: 46px;
+            background: Theme.primary;
+            Icon {
+                shape: Icons.bubble;
+                color: white;
+                solid: true;
+                size: 52px;
+            }
+        }
+
+        Rectangle {
+            y: 116px;
+            height: parent.height - 116px;
+
+            Page {
+                active: root.step == AuthStep.connecting;
+                error: root.error;
+                title: "Ferrogram";
+                description: "Соединение с Telegram…";
+                HorizontalLayout {
+                    alignment: center;
+                    Spinner {
+                        size: 34px;
+                    }
+                }
+            }
+
+            Page {
+                active: root.step == AuthStep.credentials;
+                error: root.error;
+                title: "Ключи приложения";
+                description: "Telegram выдаёт их бесплатно: my.telegram.org → API development tools. Ключи хранятся только на этом компьютере.";
+                api-id := TextField {
+                    placeholder: "api_id";
+                    input-type: InputType.number;
+                    enabled: !root.busy;
+                    accepted => {
+                        api-hash.focus-input();
+                    }
+                }
+
+                api-hash := TextField {
+                    placeholder: "api_hash";
+                    enabled: !root.busy;
+                    accepted => {
+                        root.submit-credentials(api-id.text, api-hash.text);
+                    }
+                }
+
+                PrimaryButton {
+                    text: "Продолжить";
+                    busy: root.busy;
+                    enabled: api-id.text != "" && api-hash.text != "";
+                    clicked => {
+                        root.submit-credentials(api-id.text, api-hash.text);
+                    }
+                }
+            }
+
+            Page {
+                active: root.step == AuthStep.phone;
+                error: root.error;
+                title: "Вход в Telegram";
+                description: "Введите номер телефона в международном формате.";
+                phone-field := TextField {
+                    placeholder: "+7 900 000-00-00";
+                    enabled: !root.busy;
+                    accepted => {
+                        root.submit-phone(self.text);
+                    }
+                }
+
+                PrimaryButton {
+                    text: "Далее";
+                    busy: root.busy;
+                    enabled: phone-field.text != "";
+                    clicked => {
+                        root.submit-phone(phone-field.text);
+                    }
+                }
+            }
+
+            Page {
+                active: root.step == AuthStep.code;
+                error: root.error;
+                title: root.phone;
+                description: "Мы отправили код в Telegram на другом вашем устройстве или по SMS.";
+                code-field := TextField {
+                    placeholder: "Код";
+                    input-type: InputType.number;
+                    enabled: !root.busy;
+                    accepted => {
+                        root.submit-code(self.text);
+                    }
+                }
+
+                PrimaryButton {
+                    text: "Войти";
+                    busy: root.busy;
+                    enabled: code-field.text != "";
+                    clicked => {
+                        root.submit-code(code-field.text);
+                    }
+                }
+
+                LinkButton {
+                    text: "Изменить номер";
+                    clicked => {
+                        root.back();
+                    }
+                }
+            }
+
+            Page {
+                active: root.step == AuthStep.password;
+                error: root.error;
+                title: "Облачный пароль";
+                description: root.hint == "" ? "Аккаунт защищён двухэтапной проверкой." : "Аккаунт защищён двухэтапной проверкой. Подсказка: \{root.hint}";
+                password-field := TextField {
+                    placeholder: "Пароль";
+                    input-type: InputType.password;
+                    enabled: !root.busy;
+                    accepted => {
+                        root.submit-password(self.text);
+                    }
+                }
+
+                PrimaryButton {
+                    text: "Войти";
+                    busy: root.busy;
+                    enabled: password-field.text != "";
+                    clicked => {
+                        root.submit-password(password-field.text);
+                    }
+                }
+
+                LinkButton {
+                    text: "Начать заново";
+                    clicked => {
+                        root.back();
+                    }
+                }
+            }
+        }
+    }
+}

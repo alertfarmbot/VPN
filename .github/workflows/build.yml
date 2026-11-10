@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    # Правки одной документации сборку не запускают.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: "1.99.1"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install $env:RUST_VERSION --profile minimal --no-self-update
+          rustup default $env:RUST_VERSION
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Тесты
+        run: cargo test --release --locked
+
+      - name: Сборка
+        run: cargo build --release --locked
+
+      # Запускает программу в демо-режиме, открывает чат и снимает экран.
+      - name: Проверка запуска
+        run: pwsh -File .github/scripts/windows-smoke.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferrogram-windows-x64
+          path: target/release/ferrogram.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-demo-screenshot
+          path: ${{ runner.temp }}/windows-demo.png
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --no-self-update
+          rustup default "$RUST_VERSION"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Тесты
+        run: cargo test --locked

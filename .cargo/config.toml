@@ -1,0 +1,4 @@
+# Библиотека времени выполнения C встраивается в .exe: программа запускается
+# на Windows без установки пакета Visual C++ Redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
